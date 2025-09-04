@@ -1,0 +1,1385 @@
+// Variáveis globais
+let loans = [];
+let transactions = [];
+let investments = [];
+let recurringIncomes = [];
+let initialBalance = 0;
+let projectionChart = null;
+let expensesChart = null;
+let investmentsChart = null;
+let wealthChart = null;
+let balanceChart = null;
+let categoryChart = null;
+let returnsChart = null;
+let forecastChart = null;
+let updateInterval = null;
+let currentTab = 'dashboard';
+
+// Cores para categorias
+const categoryColors = {
+    'Alimentação': '#FF6384',
+    'Transporte': '#36A2EB',
+    'Combustível': '#FF6384',
+    'Moradia': '#FFCE56',
+    'Saúde': '#4BC0C0',
+    'Educação': '#9966FF',
+    'Lazer': '#FF9F40',
+    'Assinaturas': '#C9CBCF',
+    'Serviços': '#8d99ae',
+    'Compras': '#FF6384',
+    'Salário': '#2ecc71',
+    'Freelance': '#3498db',
+    'Investimentos': '#9b59b6',
+    'Presente': '#FF9F40',
+    'Outros': '#95a5a6'
+};
+
+// Dados de exemplo para cotações (simulados)
+const mockQuotes = {
+    'PETR4.SA': { price: 28.45, change: 1.2, name: 'Petróleo Brasileiro S/A' },
+    'VALE3.SA': { price: 72.30, change: -0.8, name: 'Vale S/A' },
+    'MXRF11.SA': { price: 10.25, change: 0.3, name: 'Maxi Renda Fundo de Investimento Imobiliário' },
+    'BTC-USD': { price: 145230.50, change: 2.5, name: 'Bitcoin' },
+    'ETH-USD': { price: 8250.75, change: 1.8, name: 'Ethereum' },
+    'ITSA4.SA': { price: 9.87, change: 0.5, name: 'Itaúsa Investimentos Itaú S/A' },
+    'BBDC4.SA': { price: 17.32, change: -1.2, name: 'Bradesco S/A' }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Configurar tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+            const tabName = this.getAttribute('data-tab');
+            switchTab(tabName);
+        });
+    });
+    
+    // Configurar eventos para elementos interativos
+    document.getElementById('incomeRecurring').addEventListener('change', function() {
+        document.getElementById('incomeRecurringOptions').style.display = this.checked ? 'block' : 'none';
+    });
+    
+    document.getElementById('expenseRecurring').addEventListener('change', function() {
+        document.getElementById('expenseRecurringOptions').style.display = this.checked ? 'block' : 'none';
+    });
+    
+    // Adicionar eventos para botões de cotações rápidas
+    document.querySelectorAll('button[data-symbol]').forEach(button => {
+        button.addEventListener('click', function() {
+            const symbol = this.getAttribute('data-symbol');
+            document.getElementById('quoteSymbol').value = symbol;
+            getQuote();
+        });
+    });
+    
+    // Carregar dados do localStorage
+    loadDataFromStorage();
+    
+    // Configurar data/hora atual como padrão para novos registros
+    const now = new Date();
+    const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    document.getElementById('loanDate').value = localDateTime;
+    document.getElementById('incomeDate').value = localDateTime;
+    document.getElementById('expenseDate').value = localDateTime;
+    document.getElementById('investmentDate').value = localDateTime;
+    document.getElementById('reportYear').value = now.getFullYear();
+    document.getElementById('reportMonth').value = now.getMonth();
+    
+    // Adicionar eventos aos botões
+    document.getElementById('addLoanBtn').addEventListener('click', addNewLoan);
+    document.getElementById('simulateBtn').addEventListener('click', showSimulation);
+    document.getElementById('addIncomeBtn').addEventListener('click', addNewIncome);
+    document.getElementById('addExpenseBtn').addEventListener('click', addNewExpense);
+    document.getElementById('setInitialBalanceBtn').addEventListener('click', setInitialBalance);
+    document.getElementById('generateReportBtn').极速赛车开奖结果【——qq:927150881——】.'generateReportBtn').addEventListener('click', generateReport);
+    document.getElementById('exportLoansBtn').addEventListener('click', exportLoans);
+    document.getElementById('exportIncomeBtn').addEventListener('click', exportIncome);
+    document.getElementById('exportExpensesBtn').addEventListener('click', exportExpenses);
+    document.getElementById('exportInvestmentsBtn').addEventListener('click', exportInvestments);
+    document.getElementById('addInvestmentBtn').addEventListener('click', addNewInvestment);
+    document.getElementById('getQuoteBtn').addEventListener('click', getQuote);
+    
+    // Iniciar atualização em tempo real
+    startRealTimeUpdates();
+    
+    // Atualizar a interface
+    updateDashboard();
+    updateLoansTable();
+    updateIncomeTable();
+    updateExpensesTable();
+    updateInvestmentsTable();
+    updateCharts();
+});
+
+function switchTab(tabName) {
+    // Atualizar tabs
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // Ativar a aba clicada
+    const activeTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+    if (activeTab) {
+        activeTab.classList.add('active');
+    }
+    
+    // Ativar o conteúdo correspondente
+    const activeContent = document.getElementById(`${tabName}-tab`);
+    if (activeContent) {
+        activeContent.classList.add('active');
+    }
+    
+    currentTab = tabName;
+    
+    // Atualizar gráficos específicos da tab se necessário
+    if (tabName === 'reports') {
+        generateReport();
+    } else if (tabName === 'dashboard') {
+        updateCharts();
+    }
+}
+
+function showNotification(message, type = 'success') {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.className = `notification ${type}`;
+    notification.classList.add('show');
+    
+    setTimeout(() => {
+        notification.classList.remove('show');
+    }, 3000);
+}
+
+function loadDataFromStorage() {
+    const storedLoans = localStorage.getItem('loanTrackerLoans');
+    const storedTransactions = localStorage.getItem('financialTransactions');
+    const storedInvestments = localStorage.getItem('financialInvestments');
+    const storedRecurringIncomes = localStorage.getItem('recurringIncomes');
+    const storedInitialBalance = localStorage.getItem('initialBalance');
+    
+    if (storedLoans) {
+        loans = JSON.parse(storedLoans);
+        
+        // Converter strings de data para objetos Date
+        loans.forEach(loan => {
+            loan.date = new Date(loan.date);
+        });
+    }
+    
+    if (storedTransactions) {
+        transactions = JSON.parse(storedTransactions);
+        
+        // Converter strings de data para objetos Date
+        transactions.forEach(transaction => {
+            transaction.date = new Date(transaction.date);
+        });
+    }
+    
+    if (storedInvestments) {
+        investments = JSON.parse(storedInvestments);
+        
+        // Converter strings de data para objetos Date
+        investments.forEach(investment => {
+            investment.date = new Date(investment.date);
+        });
+    }
+    
+    if (storedRecurringIncomes) {
+        recurringIncomes = JSON.parse(storedRecurringIncomes);
+    }
+    
+    if (storedInitialBalance) {
+        initialBalance = parseFloat(storedInitialBalance);
+        document.getElementById('initialBalance').value = initialBalance;
+    }
+}
+
+function saveDataToStorage() {
+    localStorage.setItem('loanTrackerLoans', JSON.stringify(loans));
+    localStorage.setItem('financialTransactions', JSON.stringify(transactions));
+    localStorage.setItem('financialInvestments', JSON.stringify(investments));
+    localStorage.setItem('recurringIncomes', JSON.stringify(recurring极速赛车开奖结果【——qq:927150881——】.recurringIncomes));
+    localStorage.setItem('initialBalance', initialBalance);
+}
+
+function addNewLoan() {
+    const amount = parseFloat(document.getElementById('loanAmount').value);
+    const interestRate = parseFloat(document.getElementById('loanInterest').value);
+    const dateString = document.getElementById('loanDate').value;
+    const debtor = document.getElementById('loanDebtor').value || 'Não informado';
+    
+    if (!amount || amount <= 0 || !interestRate || interestRate <= 0 || !dateString) {
+        showNotification('Por favor, preencha todos os campos obrigatórios com valores válidos.', 'error');
+        return;
+    }
+    
+    // Converter para objeto Date
+    const date极速赛车开奖结果【——qq:927150881——】.    const date = new Date(dateString);
+    
+    // Adicionar o novo empréstimo
+    const newLoan = {
+        id: Date.now(), // ID único baseado no timestamp
+        amount: amount,
+        interestRate: interestRate,
+        date: date,
+        debtor: debtor
+    };
+    
+    loans.push(newLoan);
+    saveDataToStorage();
+    
+    // Limpar o formulário
+    document.getElementById('loanAmount').value = '';
+    document.getElementById('loanInterest').value = '';
+    document.getElementById('loanDebtor').value = '';
+    
+    // Atualizar a interface
+    updateDashboard();
+    updateLoansTable();
+    updateCharts();
+    
+    showNotification('Empréstimo adicionado com sucesso!');
+}
+
+function addNewIncome() {
+    const amount = parseFloat(document.getElementById('incomeAmount').value);
+    const category = document.getElementById('incomeCategory').极速赛车开奖结果【——qq:927150881——】.'incomeCategory').value;
+    const dateString = document.getElementById('incomeDate').value;
+    const description = document.getElementById('incomeDescription').value || 'Sem descrição';
+    const isRecurring = document.getElementById('incomeRecurring').checked;
+    const recurringFrequency = document.getElementById('incomeRecurringFrequency').value;
+    
+    if (!amount || amount <= 0 || !dateString) {
+        showNotification('Por favor, preencha todos os campos obrigatórios com valores válidos.', 'error');
+        return;
+    }
+    
+    // Converter para objeto Date
+    const date = new Date(dateString);
+    
+    // Adicionar a nova transação
+    const newTransaction = {
+        id: Date.now(), // ID único baseado no timestamp
+        type: 'income',
+        amount: amount,
+        category: category,
+        date: date,
+        description: description,
+        isRecurring: isRecurring,
+        recurringFrequency: isRecurring ? recurringFrequency : null
+    };
+    
+    transactions.push(newTransaction);
+    saveDataToStorage();
+    
+    // Limpar o formulário
+    document.getElementById('incomeAmount').value = '';
+    document.getElementById('incomeDescription').value = '';
+    document.getElementById('incomeRecurring').checked = false;
+    document.getElementById('incomeRecurringOptions').style.display = 'none';
+    
+    // Atualizar a interface
+    updateDashboard();
+    updateIncomeTable();
+    updateCharts();
+    
+    showNotification('Ganho adicionado com sucesso!');
+}
+
+function addNewExpense() {
+    const amount = parseFloat(document.getElementById('expenseAmount').value);
+    const category = document.getElementById('expenseCategory').value;
+    const dateString = document.getElementById('expenseDate').value;
+    const description = document.getElementById('expenseDescription').value || 'Sem descrição';
+    const isRecurring = document.getElementById('expenseRecurring').checked;
+    const recurringFrequency = document.getElementById('expenseRecurringFrequency').value;
+    
+    if (!amount || amount <= 0 || !dateString极速赛车开奖结果【——qq:927150881——】.!dateString) {
+        showNotification('Por favor, preencha todos os campos obrigatórios com valores válidos.', 'error');
+        return;
+    }
+    
+    // Converter para objeto Date
+    const date = new Date(dateString);
+    
+    // Adicionar a nova transação
+    const newTransaction = {
+        id: Date.now(), // ID único baseado no timestamp
+        type: 'expense',
+        amount: amount,
+        category: category,
+        date: date,
+        description: description,
+        isRecurring: isRecurring,
+        recurringFrequency: isRecurring ? recurringFrequency : null
+    };
+    
+    transactions.push(newTransaction);
+    saveDataToStorage();
+    
+    // Limpar o formulário
+    document.getElementById('expenseAmount').value = '';
+    document.getElementById('expenseDescription').value = '';
+    document.getElementById('expenseRecurring').checked = false;
+    document.getElementById('expenseRecurringOptions').style.display = 'none';
+    
+    // Atualizar a interface
+    updateDashboard();
+    updateExpensesTable();
+    updateCharts();
+    
+    showNotification('Gasto adicionado com sucesso!');
+}
+
+function addNewInvestment() {
+    const type = document.getElementById('investmentType').value;
+    const name = document.getElementById('investmentName').value;
+    const amount = parseFloat(document.getElementById('investmentAmount').value);
+    const quantity = parseFloat(document.getElementById('investmentQuantity').value);
+    const dateString = document.getElementById('investmentDate').value;
+    const returnRate = parseFloat(document.getElementById('investmentReturn').value) || 0;
+    
+    if (!name || !amount || amount <= 0 || !quantity || quantity <= 0 || !dateString) {
+        showNotification('Por favor, preencha todos os campos obrigatórios com valores válidos.', 'error');
+        return;
+    }
+    
+    // Converter para objeto Date
+    const date = new Date(dateString);
+    
+    // Adicionar o novo investimento
+    const newInvestment = {
+        id: Date.now(), // ID único baseado no timestamp
+        type: type,
+        name: name,
+        amount: amount,
+        quantity: quantity,
+        date: date,
+        returnRate: returnRate
+    };
+    
+    investments.push(newInvestment);
+    saveDataToStorage();
+    
+    // Limpar o formulário
+    document.getElementById('investmentName').value = '';
+    document.getElementById('investmentAmount').value = '';
+    document.getElementById('investmentQuantity').value = '';
+    document.getElementById('investmentReturn').极速赛车开奖结果【——qq:927150881——】.'investmentReturn').value = '';
+    
+    // Atualizar a interface
+    updateDashboard();
+    updateInvestmentsTable();
+    update极速赛车开奖结果【——qq:927150881——】.updateCharts();
+    
+    showNotification('Investimento adicionado com sucesso!');
+}
+
+function setInitialBalance() {
+    const balance = parseFloat(document.getElementById('initialBalance').value) || 0;
+    initialBalance = balance;
+    saveDataToStorage();
+    updateDashboard();
+    showNotification('Saldo inicial definido com sucesso!');
+}
+
+function removeLoan(loanId) {
+    if (confirm('Tem certeza que deseja remover este empréstimo?')) {
+        loans = loans.filter(loan => loan.id !== loanId);
+        saveDataToStorage();
+        
+        // Atualizar a interface
+        updateDashboard();
+        updateLoansTable();
+        updateCharts();
+        
+        showNotification('Empréstimo removido com sucesso!');
+    }
+}
+
+function removeTransaction(transactionId) {
+    if (confirm('Tem certeza que deseja remover esta transação?')) {
+        transactions = transactions.filter(transaction => transaction.id !== transactionId);
+        saveDataToStorage();
+        
+        // Atualizar a interface
+        updateDashboard();
+        updateIncomeTable();
+        updateExpensesTable();
+        updateCharts();
+        
+        showNotification('Transação removida com sucesso!');
+    }
+}
+
+function removeInvestment(investmentId) {
+    if (confirm('Tem certeza que deseja remover este investimento?')) {
+        investments = investments.filter(investment => investment.id !== investmentId);
+        saveDataToStorage();
+        
+        // Atualizar a interface
+        updateDashboard();
+        updateInvestmentsTable();
+        updateCharts();
+        
+        showNotification('Investimento removido com sucesso!');
+    }
+}
+
+function calculateLoanValue(loan) {
+    const now = new Date();
+    const loanDate = new Date(loan.date);
+    
+    // Calcular diferença em milissegundos
+    const diffMs = now - loanDate;
+    
+    // Converter para dias (arredondando para baixo)
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Calcular juros proporcionais
+    const dailyRate = loan.interestRate / 30 / 100; // Taxa diária
+    const interest = loan.amount * dailyRate * diffDays;
+    
+    // Valor total a receber
+    const total = loan.amount + interest;
+    
+    return {
+        days: diffDays,
+        interest: interest,
+        total: total
+    };
+}
+
+function calculateBalance() {
+    let balance = initialBalance;
+    
+    // Adicionar ganhos
+    transactions.filter(t => t.type === 'income').forEach(t => {
+        balance += t.amount;
+    });
+    
+    // Subtrair gastos
+    transactions.filter(t => t.type === 'expense').forEach(t => {
+        balance -= t.amount;
+    });
+    
+    return balance;
+}
+
+function calculateTotals() {
+    let totalIncome = 0;
+    let totalExpenses = 0;
+    
+    transactions.forEach(transaction => {
+        if (transaction.type === 'income') {
+            totalIncome += transaction.amount;
+        } else {
+            totalExpenses += transaction.amount;
+        }
+    });
+    
+    return {
+        income: totalIncome,
+        expenses: totalExpenses
+    };
+}
+
+function calculateRecurringMonthly() {
+    let monthlyIncome = 0;
+    let monthlyExpenses = 0;
+    
+    // Calcular receitas recorrentes
+    transactions.filter(t => t.isRecurring && t.type === 'income').forEach(income => {
+        if (income.recurringFrequency === 'weekly') {
+            monthlyIncome += income.amount * 4.33;
+        } else if (income.recurringFrequency === 'monthly') {
+            monthlyIncome += income.amount;
+        } else if (income.recurringFrequency === 'quarterly') {
+            monthlyIncome += income.amount / 3;
+        } else if (income.recurringFrequency === 'yearly') {
+            monthlyIncome += income.amount / 12;
+        }
+    });
+    
+    // Calcular despesas recorrentes
+    transactions.filter(t => t极速赛车开奖结果【——qq:927150881——】.t.isRecurring && t.type === 'expense').forEach(expense => {
+        if (expense.recurringFrequency === 'weekly') {
+            monthlyExpenses += expense.amount * 4.33;
+        } else if (expense.recurringFrequency === 'month极速赛车开奖结果【——qq:927150881——】.'monthly') {
+            monthlyExpenses += expense.amount;
+        } else if (极速赛车开奖结果【——qq:927150881——】.expense.recurringFrequency === 'quarterly') {
+            monthlyExpenses += expense.amount / 3;
+        } else if (expense.recurringFrequency === 'yearly') {
+            monthlyExpenses += expense.amount / 12;
+        }
+    });
+    
+    return {
+        income: monthlyIncome,
+        expenses: monthlyExpenses极速赛车开奖结果【——qq:927150881——】.expenses
+    };
+}
+
+function updateDashboard() {
+    let totalAmount = 0;
+    let totalLoaned = 0;
+    let totalInterest = 0;
+    
+    loans.forEach(loan => {
+        const calculated = calculateLoan极速赛车开奖结果【——qq:927150881——】.calculateLoanValue(loan);
+        totalLoaned += loan.amount;
+        totalInterest += calculated.interest;
+        totalAmount += calculated.total;
+    });
+    
+    const totals = calculateTotals();
+    const balance = calculateBalance();
+    const recurring = calculateRecurringMonthly();
+    const invested = investments.reduce((sum, inv) => sum + inv.amount, 0);
+    const monthlyEarnings = investments.reduce((sum, inv) => sum + (inv.amount * (inv.returnRate / 100) / 12), 0);
+    
+    document.getElementById('totalAmount').textContent = formatCurrency(totalAmount);
+    document.getElementById('totalLoaned').textContent = formatCurrency(totalLoaned);
+    document.getElementById('totalInterest').textContent = formatCurrency(totalInterest);
+    document.getElementById('activeLoans').textContent = loans.length;
+    
+    document.getElementById('currentBalance').textContent = formatCurrency(balance);
+    document.getElementById('totalIncome').textContent = formatCurrency(totals.income);
+    document.getElementById('totalExpenses').textContent = formatCurrency(totals.expenses);
+    document.getElementById('totalTransactions').textContent = transactions.length;
+    
+    document.getElementById('totalInvested').textContent = formatCurrency(invested);
+    document.getElementById('monthlyEarnings').textContent = formatCurrency(monthlyEarnings);
+    document.getElementById('monthlyExpenses').textContent = formatCurrency(recurring.expenses);
+    document.getElementById('monthlyIncome').textContent = formatCurrency(recurring.income);
+    
+    // Atualizar horário da última atualização
+    const now = new Date();
+    document.getElementById('lastUpdate').textContent = `Atualizado em: ${formatTime(now)}`;
+}
+
+function updateLoansTable() {
+    const tableBody = document.getElementById('loansTableBody');
+    tableBody.innerHTML = '';
+    
+    if (loans.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="7">Nenhum empréstimo registrado</td></tr>';
+        return;
+    }
+    
+    // Ordenar empréstimos do mais recente para o mais antigo
+    const sortedLoans = [...loans].sort((a, b) => b.date - a.date);
+    
+    sortedLoans.forEach(loan => {
+        const calculated = calculateLoanValue(loan);
+        const row = document.createElement('tr');
+        
+        row.innerHTML = `
+            <td>${formatDate(loan.date)}</td>
+            <td>${loan.debtor}</td>
+            <td>${formatCurrency(loan.amount)}</td>
+            <td>${loan.interestRate.toFixed(2)}%</td>
+            <td>${formatCurrency(calculated.interest)}极速赛车开奖结果【——qq:927150881——】.formatCurrency(calculated.interest)}</td>
+            <td>${formatCurrency(calculated.total)}</td>
+            <td>
+                <button class="action-btn delete" onclick="removeLoan(${loan.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+}
+
+function updateIncomeTable() {
+    const tableBody = document.getElementById('incomeTableBody');
+    tableBody.innerHTML = '';
+    
+    const incomeTransactions = transactions.filter(t => t.type === 'income');
+    
+    if (incomeTransactions.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="6">Nenhum ganho registrado</td></tr>';
+        return;
+    }
+    
+    // Ordenar transações do mais recente para o mais antigo
+    const sortedTransactions = [...incomeTransactions].sort((a, b) => b.date - a.date);
+    
+    sortedTransactions.forEach(transaction => {
+        const row = document.createElement('tr');
+        const recurringBadge = transaction.isRecurring ? 
+            `<span class="category-badge recurring-badge">${transaction.recurringFrequency === 'weekly' ? 'Semanal' : 
+              transaction.recurringFrequency === 'monthly' ? 'Mensal' : 
+              transaction.recurringFrequency === 'quarterly'极速赛车开奖结果【——qq:927150881——】.'quarterly' ? 'Trimestral' : 'Anual'}</span>` : '';
+        
+        row.innerHTML = `
+            <td>${formatDate(transaction.date)}</td>
+            <td>${transaction.description}</td>
+            <td><span class="category-badge" style="background: ${categoryColors[transaction.category] || '#95a5a6'}">${transaction.category}</span></td>
+            <td style="color: #2ecc71">+ ${formatCurrency(transaction.amount)}</td>
+            <td>${recurringBadge}</td>
+            <td>
+                <button class="action-btn delete" onclick="removeTransaction(${transaction.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+}
+
+function updateExpensesTable() {
+    const tableBody = document.getElementById('expensesTableBody');
+    tableBody.innerHTML = '';
+    
+    const expenseTransactions = transactions.filter(t => t.type === 'expense');
+    
+    if (expenseTransactions.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="6">Nenhum gasto registrado</td></tr>';
+        return;
+    }
+    
+    // Ordenar transações do mais recente para o mais antigo
+    const sortedTransactions = [...expenseTransactions].sort((极速赛车开奖结果【——qq:927150881——】.sort((a, b) => b.date - a.date);
+    
+    sortedTransactions.forEach(transaction => {
+        const row = document.createElement('tr');
+        const recurringBadge = transaction.isRecurring ? 
+            `<span class="category-badge recurring-badge">${transaction.recurringFrequency === 'weekly' ? 'Semanal' : 
+              transaction.recurringFrequency === 'monthly' ? 'Mensal' : 
+              transaction.recurringFrequency === 'quarterly' ? 'Trimestral' : '极速赛车开奖结果【——qq:927150881——】.'Anual'}</span>` : '';
+        
+        row.innerHTML = `
+            <td>${formatDate(transaction.date)}</极速赛车开奖结果【——qq:927150881——】.transaction.date)}</td>
+            <td>${transaction.description}</td>
+            <td><span class="category-badge" style="background: ${categoryColors[transaction.category] || '#95a5a6'}">${transaction.category}</span></td>
+            <td style="color: #e74c3c">- ${formatCurrency(transaction.amount)}</td>
+            <td>${recurringBad极速赛车开奖结果【——qq:927150881——】.recurringBadge}</td>
+            <td>
+                <button class="action-btn delete" onclick="removeTransaction(${transaction.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+}
+
+function updateInvestmentsTable() {
+    const tableBody = document.getElementById('investmentsTableBody');
+    tableBody.innerHTML = '';
+    
+    if (investments.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="8">Nenhum investimento registrado</td></tr>';
+        return;
+    }
+    
+    // Ordenar investimentos do mais recente para o mais antigo
+    const sortedInvestments = [...investments].sort((a, b) => b.date - a.date);
+    
+    sortedInvestments.forEach(investment => {
+        const row = document.createElement('tr');
+        const currentValue = investment.amount * (1 + (investment.returnRate / 100));
+        
+        row.innerHTML = `
+            <td>${formatDate(investment.date)}</td>
+           极速赛车开奖结果【——qq:927150881——】.            <td>${getInvestmentTypeName(investment.type)}</td>
+            <td>${investment.name}</td>
+            <td>${formatCurrency(investment.amount)}</td>
+            <td>${investment.quantity}</td>
+            <td>${investment.returnRate.toFixed(2)}%</td>
+            <td>${formatCurrency(currentValue)}</td>
+            <td>
+                <button class="action-btn delete" onclick="removeInvestment(${investment.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+}
+
+function getInvestmentTypeName(type) {
+    const types = {
+        'stock': 'Ação',
+        'fiis': 'FIIs',
+        'fixed_income': 'Renda Fixa',
+        'crypto': 'Criptomoeda',
+        'et极速赛车开奖结果【——qq极速赛车开奖结果【——qq:927150881——】.927150881——】.'etf': 'ETF',
+        'other': 'Outro'
+    };
+    return types[type] || type;
+}
+
+function updateCharts() {
+    updateProjectionChart();
+    updateExpensesChart();
+    updateInvestmentsChart();
+    updateWealthChart();
+}
+
+function updateProjectionChart() {
+    const ctx = document.getElementById('projectionChart').getContext('2d');
+    
+    // Se já existe um gráfico, destruí-lo
+    if (projectionChart) {
+        projectionChart.destroy();
+    }
+    
+    // Gerar dados de projeção para os próximos 30 dias
+    const days = Array.from({length: 30}, (_, i) => i + 1);
+    const projectionData = days.map(day => {
+        let total = 0;
+        loans.forEach(loan => {
+            const loanDate = new Date(loan.date);
+            const futureDate = new Date();
+            futureDate.setDate(futureDate.getDate() + day);
+            
+            const diffMs = futureDate - loanDate;
+            const diffDays = Math.floor(diffMs / (极速赛车开奖结果【——qq:927150881——】.diffMs / (1000 * 60 * 60 * 24));
+            
+            if (diffDays > 0) {
+                const dailyRate = loan.interestRate / 30 / 100;
+                const interest = loan.amount * dailyRate * diffDays;
+                total += loan.amount + interest;
+            } else {
+                total += loan.amount; // Ainda não começou a gerar juros
+            }
+        });
+        return total;
+    });
+    
+    // Criar o gráfico
+    projectionChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: days,
+            datasets: [{
+                label: 'Projeção de Valor a Receber',
+                data: projectionData,
+                borderColor: '#4a6491',
+                backgroundColor: 'rgba(74, 100, 145, 0.1)',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: '极速赛车开奖结果【——qq:927150881——】.'Projeção dos Próximos 30 Dias'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'Dia ' + context.label + ': ' + formatCurrency(context.parsed.y);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: {
+                        display: true,
+                        text: 'Valor (R$)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Dias'
+                    }
+极速赛车开奖结果【——qq:927150881——】.                    }
+                }
+            }
+        }
+    });
+}
+
+function updateExpensesChart() {
+    const ctx = document.getElementById('expensesChart').getContext('2d');
+    
+    // Se já existe um gráfico, destruí-lo
+    if (expensesChart) {
+        expensesChart.destroy();
+    }
+    
+    // Calcular totais por categoria
+    const expensesByCategory = {};
+    transactions.filter(t => t.type === 'expense').forEach(transaction => {
+        if (!expensesByCategory[transaction.category]) {
+            expensesByCategory[transaction.category] = 0;
+        }
+        expensesByCategory[transaction.category] += transaction.amount;
+    });
+    
+    const categories = Object.keys(expensesByCategory);
+    const amounts = Object.values(expensesByCategory);
+    const backgroundColors = categories.map(cat => categoryColors[cat] || '#95a5a6');
+    
+    // Criar o gráfico
+    expensesChart = new Chart(ctx, {
+        type: 'doughnut',
+        data极速赛车开奖结果【——极速赛车开奖结果【——qq:927150881——】.qq:927150881——】.        data: {
+            labels: categories,
+            datasets: [{
+                data: amounts,
+                backgroundColor: backgroundColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right',
+                },
+                tooltip: {
+                    callbacks: {
+                        label极速赛车开奖结果【——qq:927150881——】.label: function(context) {
+                            return context.label + ': ' + formatCurrency(context.parsed);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateInvestmentsChart() {
+    const ctx = document.getElementById('investmentsChart').getContext('2d');
+    
+    // Se já existe um gráfico, destruí-lo
+    if (investmentsChart) {
+        investmentsChart.destroy();
+   极速赛车开奖结果【——qq:927150881——】.investmentsChart.destroy();
+    }
+    
+    // Calcular totais por tipo de investimento
+    const investmentsByType = {};
+    investments.forEach(investment => {
+        if (!investmentsByType[investment.type]) {
+            investmentsByType[investment.type] = 极速赛车开奖结果【——qq:927极速赛车开奖结果【——qq:927150881——】.927150881——】.investmentsByType[investment.type] = 0;
+        }
+        investmentsByType[investment.type] += investment.amount;
+    });
+    
+    const types = Object.keys(investmentsBy极速赛车开奖结果【——qq:927150881——】.investmentsByType);
+    const amounts = Object.values(investmentsByType);
+    const backgroundColors = types.map((type, index) => {
+        const colors = ['#4cc9极速赛车开奖结果【——qq:927150881——】.'#4cc9f0', '#4895ef', '#4361ee', '#3a0ca3', '#7209b7', '#f72585'];
+        return colors[index % colors.length];
+    });
+    
+    // Criar o gráfico
+    investmentsChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: types.map(type => getInvestmentTypeName(type)),
+            datasets: [{
+                data: amounts,
+                backgroundColor: backgroundColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': ' + formatCurrency(context.parsed);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateWealthChart() {
+    const ctx = document.getElementById('wealthChart').getContext('极速赛车开奖结果【——qq:927极速赛车开奖结果【——qq:927150881——】.927150881——】.'2d');
+    
+    // Se já existe um gráfico, destruí-lo
+    if (wealthChart) {
+        wealthChart.destroy();
+    }
+    
+    // Gerar dados de evolução patrimonial (últimos 6 meses)
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    
+    const labels = [];
+    const data = [];
+    
+    for (let i = 5; i >= 极速赛车极速赛车开奖结果【——qq:927150881——】.结果【——qq:927150881——】.for (let i = 5; i >= 0; i--) {
+        const monthIndex = (currentMonth - i + 12) % 12;
+        labels.push(months[monthIndex]);
+        
+        // Simular crescimento patrimonial (em uma aplicação real, isso viria dos dados)
+        const baseValue = 10000 + (Math.random() * 5000);
+        data.push(baseValue + (i * 1500));
+    }
+    
+    // Criar o gráfico
+    wealthChart = new Chart(ctx, {
+        type: 'line极速赛车开奖结果【——qq:927150881——】.type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Evolução Patrimonial',
+                data: data,
+                borderColor: '#4cc9f0',
+                backgroundColor: 'rgba(76, 201, 240, 0.1)极速赛车开奖结果【——qq:927150881——】.240, 0.1)',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Evolução dos Últimos 6 Meses'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return formatCurrency(context.parsed.y);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: {
+                        display: true,
+                        text: 'Valor (R$)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function generateReport() {
+    const selectedMonth = parseInt(document.getElementById('reportMonth').value);
+    const selectedYear = parseInt(document.getElementById('reportYear').value);
+    
+    // Filtrar transações pelo mês/ano selecionado
+    const filteredTransactions = transactions.filter(transaction => {
+        const transactionDate = new Date(transaction.date);
+        return transactionDate.getMonth() === selectedMonth && 
+               transactionDate.getFullYear() === selectedYear;
+    });
+    
+    // Atualizar gráficos do relatório
+    updateBalanceChart(filteredTransactions, selectedMonth, selectedYear);
+    updateCategoryChart(filteredTransactions);
+    updateReturnsChart();
+    updateForecastChart();
+}
+
+function updateBalanceChart(transactions, month, year) {
+    const ctx = document.getElementById('balanceChart').getContext('2d');
+    
+    // Se já existe um gráfico, destruí-lo
+    if (balanceChart) {
+        balanceChart.destroy();
+    }
+    
+    // Calcular saldo diário
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const dailyBalance = Array(daysInMonth).fill(initialBalance);
+    
+    // Aplicar transações
+    transactions.forEach(transaction => {
+        const day = new Date(transaction.date).getDate() - 1; // Índice 0-based
+        if (transaction.type === 'income') {
+            for (let i = day; i < daysInMonth; i++) {
+                dailyBalance[i] += transaction.amount;
+            }
+        } else {
+            for (let i = day; i < days极速赛车开奖结果极速赛车极速赛车开奖结果【——qq:927150881——】.结果【——qq:927150881——】.【——qq:927150881——】.for (let i = day; i < daysInMonth; i++) {
+                dailyBalance[i] -= transaction.amount;
+            }
+        }
+    });
+    
+    // Criar o gráfico极速赛车开奖结果【——qq:927150881——】.gráfico
+    balanceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: Array.from({length: daysInMonth}, (_, i极速赛车开奖结果【——qq:927150881——】.(_, i) => i + 1),
+            datasets: [{
+                label: 'Saldo Diário',
+                data: dailyBalance,
+                borderColor: '#4a6491',
+                backgroundColor: 'rgba(74, 100, 145, 0.1)',
+                borderWidth: 2,
+                tension: 0.1,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins极速赛车开奖结果【——qq:927150881——】.plugins: {
+                title: {
+                    display: true,
+                    text: 'Evolução do Saldo no Mês'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'D极速赛车开奖结果【——qq:927150881——】.'Dia ' + context.label + ': ' + formatCurrency(context.parsed.y);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    begin极速赛车开奖结果【——qq:927150881——】.beginAtZero: false,
+                    title: {
+                        display: true,
+                        text: 'Saldo (R$)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Dia do Mês'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateCategoryChart(transactions) {
+    const ctx = document.getElementById('categoryChart').getContext('2d');
+    
+    // Se já existe um gráfico, destruí-lo
+    if (categoryChart) {
+        categoryChart.destroy();
+    }
+    
+    // Calcular totais por categoria
+    const expensesByCategory = {};
+    transactions.filter(t => t.type === 'expense').forEach(transaction => {
+        if (!expensesByCategory[transaction.category]) {
+            expensesByCategory[transaction.category] = 0;
+        }
+        expensesByCategory[transaction.category] += transaction.amount;
+    });
+    
+    const categories = Object.keys(expensesByCategory);
+    const amounts = Object.values(expensesByCategory);
+    const backgroundColors = categories.map(cat => categoryColors[cat] || '#95a5a6');
+    
+    // Criar o gráfico
+    categoryChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: categories,
+            datasets: [{
+                data: amounts,
+                backgroundColor: backgroundColors,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'right',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': ' + formatCurrency(context.parsed);
+                        }
+                    }
+                }
+            }
+极速赛车开奖结果【——qq:927150881——】.            }
+        }
+    });
+}
+
+function updateReturnsChart() {
+    const ctx = document.getElementById('returnsChart').getContext('2d');
+    
+    // Se já existe um gráfico, destruí-lo
+极速赛车开奖结果【——qq:927150881——】.    if (returnsChart) {
+        returnsChart.destroy();
+    }
+    
+    // Dados de exemplo para rentabilidade
+    const labels = investments.map(inv => inv.name);
+    const expectedReturns = investments.map(in极速赛车开奖结果【——qq:927150881——】.map(inv => inv.returnRate);
+    const actualReturns = investments.map(inv => inv.returnRate + (Math.random() * 5 - 2.5)); // Simular variação
+    
+    // Criar o gráfico
+    returnsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Retorno Esperado',
+                    data: expectedReturns,
+                    backgroundColor: 'rgba(76, 201, 240, 0.7)',
+                    borderColor: '#4cc9f极速赛车开奖结果【——qq:927150881——】.'#4极速赛车开奖结果【——qq:927150881——】.#4cc9f0',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Retorno Real (simulado)',
+                    data: actualReturns,
+                    backgroundColor: 'rgba(114, 9, 183, 0.7)',
+                    borderColor: '#7209b7',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options:极速赛车开奖结果【——qq:927150881——】.options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Rentabilidade dos Investimentos'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Retorno (%)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateForecastChart() {
+    const ctx = document.getElementById('forecastChart').getContext('2d');
+    
+    // Se já existe um gráfico, destruí-lo
+    if (forecastChart) {
+        forecastChart.destroy();
+    }
+    
+    // Dados de exemplo para previsão
+    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'];
+    const incomeData = [2500, 2500极速赛车开奖结果【——qq:927150881——】.2500, 2500, 2500, 2500];
+    const expensesData = [1800, 1900, 1850, 1950, 2000, 1900];
+    
+    // Criar o gráfico
+    forecastChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: months,
+            datasets: [
+                {
+                    label: 'Receitas',
+                    data: incomeData,
+                    backgroundColor: 'rgba(46, 204, 113, 0.7)',
+                    borderColor: '#2ecc71',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Despesas',
+                    data: expensesData,
+                    backgroundColor: 'rgba(231, 76, 60, 0.7)',
+                    borderColor: '#e74c3c',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Previsão de Receitas e Despesas'
+                },
+                tool极速赛车开奖结果【——qq:927150881——】.tooltip极速赛车开奖结果【——qq:927150881——】.tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + formatCurrency(context.parsed.y);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true极速赛车开奖结果【——qq:927150881——】.beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Valor (R$)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function showSimulation() {
+    const amount = parseFloat(document.getElementById('simulationAmount').value);
+    const interestRate = parseFloat(document.getElementById('simulationInterest').value);
+    const days = parseInt(document.getElementById('simulationDays').value);
+    
+    if (!amount || amount <= 0 || !interestRate || interestRate <= 0 || !days || days <= 0) {
+        showNotification('Por favor, preencha todos os campos com valores válidos.', 'error');
+        return;
+    }
+    
+    // Calcular simulação
+    const dailyRate = interestRate / 30 / 100;
+    const interest = amount * dailyRate * days;
+    const total = amount + interest;
+    
+    // Mostrar resultado
+    alert(`Simulação de ${days} dias:\n\n` +
+          `Valor inicial: ${formatCurrency(amount)}\n` +
+          `Taxa de juros: ${interestRate.toFixed(2)}% ao mês\n` +
+          `Juros acumulados: ${formatCurrency(interest)}\n` +
+          `Total: ${formatCurrency(total)}\n\n` +
+          `Isso equivale a ${formatCurrency(amount * dailyRate)} por dia.`);
+}
+
+function getQuote() {
+    const symbol = document.getElementById('quoteSymbol').value.toUpperCase();
+    
+    if (!symbol) {
+        showNotification('Por favor, informe o código do ativo.', 'error');
+        return;
+    }
+    
+    // Usar dados simulados em vez da API do Yahoo Finance
+    // para evitar problemas de CORS
+    if (mockQuotes[symbol]) {
+        const quote = mockQuotes[symbol];
+        const change = quote.change;
+        const changePercent = (change / quote.price) * 100;
+        
+        // Exibir resultado
+        document.getElementById('quoteResult').style.display = 'block';
+        document.getElementById('quoteDetails').innerHTML = `
+            <p><strong>${symbol} - ${quote.name}</strong></p>
+            <p>Preço: <strong>${formatCurrency(quote.price)}</strong></p>
+            <p>Variação: <strong style="color: ${change >= 0 ? '#2ecc71' : '#e74c3c'}">${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent.toFixed(2)}%)</strong></极速赛车开奖结果【——qq:927150881——】.%)</strong></p>
+            <p>Última atualização: ${new Date().toLocaleTimeString()}</p>
+        `;
+        
+        showNotification(`Cotação de ${symbol} obtida com sucesso!`);
+    } else {
+        showNotification(`Não foi possível obter a cotação para ${symbol}.`, 'error');
+    }
+}
+
+function exportLoans() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(loans, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "emprestimos_" + new Date().toISOString().slice(0, 10) + ".json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    
+    showNotification('Empréstimos exportados com sucesso!');
+}
+
+function exportIncome() {
+    const incomeTransactions = transactions.filter(t => t.type === 'income');
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(incomeTransactions, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "ganhos_" + new Date().toISOString().slice(0, 10) + ".json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    
+    showNotification('Ganhos exportados com sucesso!');
+}
+
+function exportExpenses() {
+    const expenseTransactions = transactions.filter(t => t.type === 'expense');
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(expenseTransactions, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "gastos_" + new Date().toISOString().slice(0, 10) + ".json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    
+    showNotification('Gastos exportados com sucesso!');
+}
+
+function exportInvestments() {
+    const dataStr = "data:text/json;charset=utf-极速赛车开奖结果【——qq:927150881——】.charset=utf-8," + encodeURIComponent(JSON.stringify(investments, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", data极速赛车开奖结果【——qq:927150881——】.dataStr);
+    downloadAnchorNode.setAttribute("download", "investimentos_" + new Date().toISOString().slice(0, 10) + ".json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    
+    showNotification('Investimentos exportados com sucesso!');
+}
+
+function startRealTimeUpdates() {
+    // Atualizar a cada minuto
+    updateInterval = setInterval(() => {
+        updateDashboard();
+        if (currentTab === 'dashboard') {
+            updateCharts();
+        }
+    }, 60000);
+}
+
+function formatCurrency(value) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+}
+
+function formatDate(date) {
+    return new Intl.DateTimeFormat('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(date);
+}
+
+function formatTime(date) {
+    return new Intl.DateTimeFormat('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    }).format(date);
+}
