@@ -1030,6 +1030,70 @@
     <div class="notification" id="notification"></div>
 
     <script>
+        function getQuote() {
+    const symbol = document.getElementById('quoteSymbol').value.toUpperCase();
+    
+    if (!symbol) {
+        showNotification('Por favor, informe o código do ativo.', 'error');
+        return;
+    }
+    
+    // Verificar se temos dados simulados para este símbolo
+    if (mockQuotes[symbol]) {
+        const quote = mockQuotes[symbol];
+        document.getElementById('quoteResult').style.display = 'block';
+        document.getElementById('quoteDetails').innerHTML = `
+            <p><strong>${symbol} - ${quote.name}</strong></p>
+            <p>Preço: <strong>${formatCurrency(quote.price)}</strong></p>
+            <p>Variação: <strong style="color: ${quote.change >= 0 ? '#2ecc71' : '#e74c3c'}">${quote.change >= 0 ? '+' : ''}${quote.change.toFixed(2)} (${(quote.change/quote.price*100).toFixed(2)}%)</strong></p>
+            <p>Última atualização: ${new Date().toLocaleTimeString()}</p>
+        `;
+        showNotification(`Cotação de ${symbol} obtida com sucesso!`);
+        return;
+    }
+    
+    // Se não temos dados simulados, usar uma API alternativa sem problemas de CORS
+    // Usando uma API pública alternativa para cotações
+    const apiUrl = `https://api.twelvedata.com/price?symbol=${symbol}&apikey=demo`;
+    
+    fetch(apiUrl)
+        .then(response => response.json())
+        .then(data => {
+            if (data.price) {
+                const price = parseFloat(data.price);
+                // Para a demonstração, vamos gerar uma variação aleatória
+                const change = (Math.random() * 10 - 5).toFixed(2);
+                const changePercent = (change / price * 100).toFixed(2);
+                
+                document.getElementById('quoteResult').style.display = 'block';
+                document.getElementById('quoteDetails').innerHTML = `
+                    <p><strong>${symbol}</strong></p>
+                    <p>Preço: <strong>${formatCurrency(price)}</strong></p>
+                    <p>Variação: <strong style="color: ${change >= 0 ? '#2ecc71' : '#e74c3c'}">${change >= 0 ? '+' : ''}${change} (${changePercent}%)</strong></p>
+                    <p>Última atualização: ${new Date().toLocaleTimeString()}</p>
+                `;
+                showNotification(`Cotação de ${symbol} obtida com sucesso!`);
+            } else {
+                showNotification(`Não foi possível obter a cotação para ${symbol}.`, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao buscar cotação:', error);
+            // Fallback para dados simulados
+            const simulatedPrice = (Math.random() * 1000).toFixed(2);
+            const change = (Math.random() * 10 - 5).toFixed(2);
+            
+            document.getElementById('quoteResult').style.display = 'block';
+            document.getElementById('quoteDetails').innerHTML = `
+                <p><strong>${symbol} (Dados Simulados)</strong></p>
+                <p>Preço: <strong>${formatCurrency(simulatedPrice)}</strong></p>
+                <p>Variação: <strong style="color: ${change >= 0 ? '#2ecc71' : '#e74c3c'}">${change >= 0 ? '+' : ''}${change} (${(change/simulatedPrice*100).toFixed(2)}%)</strong></p>
+                <p>Última atualização: ${new Date().toLocaleTimeString()}</p>
+                <p style="font-size: 12px; color: #777;">Observação: Estes são dados simulados para fins de demonstração.</p>
+            `;
+            showNotification(`Cotação de ${symbol} (dados simulados) obtida!`);
+        });
+}
         // Variáveis globais
         let loans = [];
         let transactions = [];
