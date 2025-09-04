@@ -740,7 +740,7 @@
                     <p style="margin-top: 15px;">Categorize seus gastos para identificar para onde seu dinheiro está indo.</p>
                     <div style="margin-top: 20px;">
                         <h3 style="font-size: 16px; margin-bottom: 10px;">Gastos Recorrentes</h3>
-                        <p>Marque gastos que se repetem regularmente para acompanhar melhor suas despesas fixas.</p>
+                        <p>Marque gastos que se repeten regularmente para acompanhar melhor suas despesas fixas.</p>
                     </div>
                 </div>
             </div>
@@ -1064,6 +1064,17 @@
             'Investimentos': '#9b59b6',
             'Presente': '#FF9F40',
             'Outros': '#95a5a6'
+        };
+        
+        // Dados de exemplo para cotações (simulados)
+        const mockQuotes = {
+            'PETR4.SA': { price: 28.45, change: 1.2, name: 'Petróleo Brasileiro S/A' },
+            'VALE3.SA': { price: 72.30, change: -0.8, name: 'Vale S/A' },
+            'MXRF11.SA': { price: 10.25, change: 0.3, name: 'Maxi Renda Fundo de Investimento Imobiliário' },
+            'BTC-USD': { price: 145230.50, change: 2.5, name: 'Bitcoin' },
+            'ETH-USD': { price: 8250.75, change: 1.8, name: 'Ethereum' },
+            'ITSA4.SA': { price: 9.87, change: 0.5, name: 'Itaúsa Investimentos Itaú S/A' },
+            'BBDC4.SA': { price: 17.32, change: -1.2, name: 'Bradesco S/A' }
         };
         
         document.addEventListener('DOMContentLoaded', function() {
@@ -1813,9 +1824,8 @@
                             }
                         }
                     }
-                    }
                 }
-            );
+            });
         }
         
         function updateExpensesChart() {
@@ -2217,191 +2227,4 @@
                         {
                             label: 'Receitas',
                             data: incomeData,
-                            backgroundColor: 'rgba(46, 204, 113, 0.7)',
-                            borderColor: '#2ecc71',
-                            borderWidth: 1
-                        },
-                        {
-                            label: 'Despesas',
-                            data: expensesData,
-                            backgroundColor: 'rgba(231, 76, 60, 0.7)',
-                            borderColor: '#e74c3c',
-                            borderWidth: 1
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Previsão de Receitas e Despesas'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return context.dataset.label + ': ' + formatCurrency(context.parsed.y);
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: 'Valor (R$)'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        function showSimulation() {
-            const amount = parseFloat(document.getElementById('simulationAmount').value);
-            const interestRate = parseFloat(document.getElementById('simulationInterest').value);
-            const days = parseInt(document.getElementById('simulationDays').value);
-            
-            if (!amount || amount <= 0 || !interestRate || interestRate <= 0 || !days || days <= 0) {
-                showNotification('Por favor, preencha todos os campos com valores válidos.', 'error');
-                return;
-            }
-            
-            // Calcular simulação
-            const dailyRate = interestRate / 30 / 100;
-            const interest = amount * dailyRate * days;
-            const total = amount + interest;
-            
-            // Mostrar resultado
-            alert(`Simulação de ${days} dias:\n\n` +
-                  `Valor inicial: ${formatCurrency(amount)}\n` +
-                  `Taxa de juros: ${interestRate.toFixed(2)}% ao mês\n` +
-                  `Juros acumulados: ${formatCurrency(interest)}\n` +
-                  `Total: ${formatCurrency(total)}\n\n` +
-                  `Isso equivale a ${formatCurrency(amount * dailyRate)} por dia.`);
-        }
-        
-        function getQuote() {
-            const symbol = document.getElementById('quoteSymbol').value.toUpperCase();
-            
-            if (!symbol) {
-                showNotification('Por favor, informe o código do ativo.', 'error');
-                return;
-            }
-            
-            // Usar API pública para buscar cotações (exemplo com Yahoo Finance)
-            fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?region=US&lang=en-US&includePrePost=false&interval=2m&range=1d&corsDomain=finance.yahoo.com&.tsrc=finance`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.chart.result && data.chart.result.length > 0) {
-                        const result = data.chart.result[0];
-                        const price = result.meta.regularMarketPrice;
-                        const previousClose = result.meta.previousClose;
-                        const change = price - previousClose;
-                        const changePercent = (change / previousClose) * 100;
-                        
-                        // Exibir resultado
-                        document.getElementById('quoteResult').style.display = 'block';
-                        document.getElementById('quoteDetails').innerHTML = `
-                            <p><strong>${result.meta.symbol} - ${result.meta.exchangeName}</strong></p>
-                            <p>Preço: <strong>${formatCurrency(price)}</strong></p>
-                            <p>Variação: <strong style="color: ${change >= 0 ? '#2ecc71' : '#e74c3c'}">${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent.toFixed(2)}%)</strong></p>
-                            <p>Última atualização: ${new Date(result.meta.regularMarketTime * 1000).toLocaleTimeString()}</p>
-                        `;
-                        
-                        showNotification(`Cotação de ${result.meta.symbol} obtida com sucesso!`);
-                    } else {
-                        showNotification(`Não foi possível obter a cotação para ${symbol}.`, 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Erro ao buscar cotação:', error);
-                    showNotification('Erro ao buscar cotação. Verifique o símbolo e tente novamente.', 'error');
-                });
-        }
-        
-        function exportLoans() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(loans, null, 2));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", "emprestimos_" + new Date().toISOString().slice(0, 10) + ".json");
-            document.body.appendChild(downloadAnchorNode);
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-            
-            showNotification('Empréstimos exportados com sucesso!');
-        }
-        
-        function exportIncome() {
-            const incomeTransactions = transactions.filter(t => t.type === 'income');
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(incomeTransactions, null, 2));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", "ganhos_" + new Date().toISOString().slice(0, 10) + ".json");
-            document.body.appendChild(downloadAnchorNode);
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-            
-            showNotification('Ganhos exportados com sucesso!');
-        }
-        
-        function exportExpenses() {
-            const expenseTransactions = transactions.filter(t => t.type === 'expense');
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(expenseTransactions, null, 2));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", "gastos_" + new Date().toISOString().slice(0, 10) + ".json");
-            document.body.appendChild(downloadAnchorNode);
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-            
-            showNotification('Gastos exportados com sucesso!');
-        }
-        
-        function exportInvestments() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(investments, null, 2));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", "investimentos_" + new Date().toISOString().slice(0, 10) + ".json");
-            document.body.appendChild(downloadAnchorNode);
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
-            
-            showNotification('Investimentos exportados com sucesso!');
-        }
-        
-        function startRealTimeUpdates() {
-            // Atualizar a cada minuto
-            updateInterval = setInterval(() => {
-                updateDashboard();
-                if (currentTab === 'dashboard') {
-                    updateCharts();
-                }
-            }, 60000);
-        }
-        
-        function formatCurrency(value) {
-            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
-        }
-        
-        function formatDate(date) {
-            return new Intl.DateTimeFormat('pt-BR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            }).format(date);
-        }
-        
-        function formatTime(date) {
-            return new Intl.DateTimeFormat('pt-BR', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
-            }).format(date);
-        }
-    </script>
-</body>
-</html>
+                            backgroundColor: 'rg
